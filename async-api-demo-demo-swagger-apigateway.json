@@ -1,0 +1,87 @@
+{
+  "swagger" : "2.0",
+  "info" : {
+    "version" : "2025-10-14T17:18:29Z",
+    "title" : "async-api-demo"
+  },
+  "host" : "ch65sfidhj.execute-api.us-east-1.amazonaws.com",
+  "basePath" : "/demo",
+  "schemes" : [ "https" ],
+  "paths" : {
+    "/" : {
+      "post" : {
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "in" : "body",
+          "name" : "PostGroupMessageModel",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/definitions/PostGroupMessageModel"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "200 response",
+            "schema" : {
+              "$ref" : "#/definitions/Empty"
+            }
+          }
+        },
+        "x-amazon-apigateway-request-validator" : "Validate body",
+        "x-amazon-apigateway-integration" : {
+          "uri" : "arn:aws:apigateway:us-east-1:sqs:path/288761753384/async-demo-sqs",
+          "credentials" : "arn:aws:iam::288761753384:role/API-gateway-all",
+          "httpMethod" : "POST",
+          "responses" : {
+            "default" : {
+              "statusCode" : "200",
+              "responseTemplates" : {
+                "application/json" : "{\r\n    \"message\": \"Request Queued\"\r\n}"
+              }
+            }
+          },
+          "requestParameters" : {
+            "integration.request.header.Content-Type" : "'application/x-www-form-urlencoded'"
+          },
+          "requestTemplates" : {
+            "application/json" : "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
+          },
+          "passthroughBehavior" : "when_no_match",
+          "type" : "aws"
+        }
+      }
+    }
+  },
+  "definitions" : {
+    "Empty" : {
+      "type" : "object",
+      "title" : "Empty Schema"
+    },
+    "PostGroupMessageModel" : {
+      "type" : "object",
+      "required" : [ "groupId", "text", "userId" ],
+      "properties" : {
+        "groupId" : {
+          "type" : "string",
+          "pattern" : "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "userId" : {
+          "type" : "string",
+          "pattern" : "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "text" : {
+          "type" : "string",
+          "minLength" : 1
+        }
+      },
+      "title" : "SentimentRequest"
+    }
+  },
+  "x-amazon-apigateway-request-validators" : {
+    "Validate body" : {
+      "validateRequestParameters" : false,
+      "validateRequestBody" : true
+    }
+  }
+}

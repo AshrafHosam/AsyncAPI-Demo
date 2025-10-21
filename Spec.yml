@@ -1,0 +1,153 @@
+asyncapi: '2.6.0'
+id: 'urn:asyncapi:example:async-demo'
+defaultContentType: application/json
+info: 
+  title: Async Demo - API Gateway -> SQS -> Lambda
+  version: '1.0.0'
+  description: |
+    Flow: API Gateway HTTP POST /demo accepts a JSON payload, validates it,
+    sends the message to a standard SQS queue async-demo-sqs (DLQ async-demo-sqs-dlq).
+    A Lambda function worker-function consumes messages from the SQS queue,
+    analyzes text and stores results in MongoDB.
+    
+servers:
+  apiGateway:
+    url: https://ch65sfidhj.execute-api.us-east-1.amazonaws.com
+    protocol: https
+    description: API Gateway endpoint that accepts POST /demo
+  awsSqs:
+    url: sqs://async-demo-sqs
+    protocol: sqs
+    description: Standard SQS queue used for async-demo
+    
+channels:
+  /demo:
+    description: HTTP endpoint on API Gateway that accepts the incoming request payload
+    publish:
+      summary: Client posts new message to API Gateway
+      operationId: receiveDemoRequest
+      bindings:
+        http:
+          type: request
+      message:
+        $ref: '#/components/messages/IncomingRequest'
+  sqs/async-demo-sqs:
+    description: SQS queue channel where validated requests are sent; worker-function subscribes
+    subscribe:
+      summary: worker-function consumes messages from the SQS queue
+      operationId: consumeFromAsyncDemoSqs
+      bindings:
+        sqs:
+          queue: async-demo-sqs
+          region: us-east-1
+          fifo: false
+          visibilityTimeout: 30
+          deadLetterQueue:
+            name: async-demo-sqs-dlq
+      message:
+        $ref: '#/components/messages/QueueMessage'
+        
+        
+components:
+  messages:
+    IncomingRequest:
+      name: incomingRequest
+      title: Incoming request posted to /demo
+      contentType: application/json
+      correlationId:
+        $ref: '#/components/correlationIds/userCorrelation'
+      payload:
+        $ref: '#/components/schemas/RequestPayload'
+      examples:
+        - name: example1
+          payload:
+            groupId: "f0e9d8c7-b6a5-4321-fedc-ba9876543210"
+            userId: "12345678-abcd-ef01-2345-6789abcdef01"
+            text: "That's awesome!"
+
+    QueueMessage:
+      name: queueMessage
+      title: Message placed on async-demo-sqs
+      contentType: application/json
+      correlationId:
+        $ref: '#/components/correlationIds/userCorrelation'
+      payload:
+        $ref: '#/components/schemas/QueuePayload'
+      examples:
+        - name: queuedExample
+          payload:
+            messageId: "9c8b7a6d-0000-1111-2222-333344445555"
+            receivedAt: "2025-10-16T00:00:00Z"
+            request:
+              groupId: "f0e9d8c7-b6a5-4321-fedc-ba9876543210"
+              userId: "12345678-abcd-ef01-2345-6789abcdef01"
+              text: "That's awesome!"
+
+  schemas:
+    RequestPayload:
+      type: object
+      required:
+        - groupId
+        - userId
+        - text
+      properties:
+        groupId:
+          type: string
+          format: uuid
+          description: Group identifier
+        userId:
+          type: string
+          format: uuid
+          description: User identifier used as correlation id
+        text:
+          type: string
+          description: Text to analyze
+
+    QueuePayload:
+      type: object
+      required:
+        - messageId
+        - receivedAt
+        - request
+      properties:
+        messageId:
+          type: string
+          description: Unique message id assigned before enqueue
+        receivedAt:
+          type: string
+          format: date-time
+          description: Time when message was enqueued
+        request:
+          $ref: '#/components/schemas/RequestPayload'
+
+    AnalysisResult:
+      type: object
+      required:
+        - messageId
+        - analysis
+        - storedAt
+      properties:
+        messageId:
+          type: string
+          description: Source message id (from queue)
+        analysis:
+          type: object
+          properties:
+            sentiment:
+              type: string
+              enum: [positive, neutral, negative]
+            score:
+              type: number
+            keywords:
+              type: array
+              items:
+                type: string
+        storedAt:
+          type: string
+          format: date-time
+          description: When record stored in MongoDB
+
+  correlationIds:
+    userCorrelation:
+      description: Correlation id that uses the request's userId field for end-to-end tracing
+      location: $message.payload#/userId
